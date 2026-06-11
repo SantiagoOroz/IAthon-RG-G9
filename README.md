@@ -38,7 +38,8 @@ Cada vez que arranca `estacion.py` la estación se reinicia limpia (contadores e
 
 | Gesto | Acción |
 |-------|--------|
-| 👍 Pulgar arriba | **Pieza terminada** → congela el frame y lo audita con la IA |
+| 👍 Pulgar arriba | **Pieza aprobada** → el operario la da por buena directamente |
+| 👎 Pulgar abajo | **Enviar a revisión** → congela el frame y lo audita con la IA |
 | ✋ Palma abierta | **Detener la línea** |
 | ✌️ Victoria | **Avanzar manual** de ensamble |
 | ✊ Puño cerrado | **Llamar al supervisor** |

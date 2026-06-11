@@ -33,9 +33,9 @@ POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarke
 GESTO_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
 
 # --- Ergonomía ---
-UMBRAL_POSTURA = 145          # grados oreja-hombro-cadera; por debajo = encorvado
-UMBRAL_CUELLO_ADELANTADO = 0.35   # fracción del ancho de torso; >0.35 = cabeza proyectada
-UMBRAL_HOMBROS_DESNIVELADOS = 0.12  # fracción del alto de torso; >0.12 = inclinación lateral
+UMBRAL_POSTURA = 163          # grados oreja-hombro-cadera; por debajo = encorvado
+UMBRAL_CUELLO_ADELANTADO = 0.20   # fracción del ancho de torso; >0.20 = cabeza proyectada
+UMBRAL_HOMBROS_DESNIVELADOS = 0.07  # fracción del alto de torso; >0.07 = inclinación lateral
 FRAMES_ALERTA_POSTURA = 15    # frames seguidos con riesgo antes de registrar una alerta
 
 # --- Gestos / comandos (debounce para no disparar 30 veces por segundo) ---
@@ -44,10 +44,11 @@ COOLDOWN_COMANDO_SEG = 3.0      # segundos mínimos entre dos disparos del mismo
 
 # Mapa de gestos -> acción industrial + color BGR para el overlay
 GESTOS = {
-    "Thumb_Up":    {"accion": "PIEZA TERMINADA  ->  Auditar calidad", "color": (0, 200, 0)},   # verde
-    "Open_Palm":   {"accion": "DETENER LINEA",                        "color": (0, 0, 255)},   # rojo
+    "Thumb_Up":    {"accion": "PIEZA APROBADA  (operario)",           "color": (0, 200, 0)},    # verde
+    "Thumb_Down":  {"accion": "ENVIAR A REVISION  ->  IA auditando",  "color": (0, 165, 255)},  # naranja
+    "Open_Palm":   {"accion": "DETENER LINEA",                        "color": (0, 0, 255)},    # rojo
     "Victory":     {"accion": "AVANZAR MANUAL",                       "color": (255, 200, 0)},  # celeste
-    "Closed_Fist": {"accion": "LLAMAR SUPERVISOR",                    "color": (0, 165, 255)},  # naranja
+    "Closed_Fist": {"accion": "LLAMAR SUPERVISOR",                    "color": (180, 100, 255)}, # violeta
 }
 
 # Prompt de sistema del auditor de calidad (idea 3)

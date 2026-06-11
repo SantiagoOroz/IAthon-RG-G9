@@ -106,13 +106,13 @@ def calcular_angulo(a, b, c):
 def evaluar_postura(landmarks, w, h):
     """
     3 métricas bilaterales para detectar riesgo ergonómico:
-      1. Ángulo espinal   — promedio izq+der (oreja-hombro-cadera)
-      2. Cabeza adelantada — desplazamiento X oreja vs hombro (visible en perfil)
-      3. Hombros desnivelados — asimetría vertical entre ambos hombros
+        1. Ángulo espinal   — promedio izq+der (oreja-hombro-cadera)
+        2. Cabeza adelantada — desplazamiento X oreja vs hombro (visible en perfil)
+        3. Hombros desnivelados — asimetría vertical entre ambos hombros
 
     Retorna (riesgo: bool, angulo: int, puntos_px: dict, detalle: str)
     """
-    MIN_VIS = 0.4
+    MIN_VIS = 0.25
     INDICES = {
         "oreja_izq": 7,  "oreja_der": 8,
         "hombro_izq": 11, "hombro_der": 12,
@@ -282,21 +282,31 @@ def main():
         # ---- Capa postura ----
         postura_riesgo = False
         angulo_int = 0
-        h_fr, w_fr = frame.shape[:2]
         res_pose = pose_detector.detect(mp_img)
         if res_pose.pose_landmarks:
-            postura_riesgo, angulo_int, puntos_px, detalle_postura = evaluar_postura(
-                res_pose.pose_landmarks[0], w_fr, h_fr
-            )
+            try:
+                lm = res_pose.pose_landmarks[0]
+                oreja, hombro, cadera = lm[7], lm[11], lm[23]
+                ang = calcular_angulo([oreja.x, oreja.y], [hombro.x, hombro.y], [cadera.x, cadera.y])
+                angulo_int = int(ang)
+                postura_riesgo = ang < config.UMBRAL_POSTURA
+                h, w = frame.shape[:2]
+                puntos_px = [
+                    (int(oreja.x * w), int(oreja.y * h)),
+                    (int(hombro.x * w), int(hombro.y * h)),
+                    (int(cadera.x * w), int(cadera.y * h)),
+                ]
+            except Exception:
+                pass
 
         if postura_riesgo:
             frames_mala_postura += 1
             if frames_mala_postura == config.FRAMES_ALERTA_POSTURA:
                 estado["contadores"]["alertas_postura"] += 1
-                st.registrar_evento("postura", {"angulo": angulo_int, "detalle": detalle_postura})
+                st.registrar_evento("postura", {"angulo": angulo_int})
         else:
             frames_mala_postura = 0
-        estado["postura"] = {"estado": "RIESGO" if postura_riesgo else "OK", "angulo": angulo_int, "detalle": detalle_postura}
+        estado["postura"] = {"estado": "RIESGO" if postura_riesgo else "OK", "angulo": angulo_int}
 
         # ---- Capa gestos (con debounce) ----
         res_gesto = gesto_recognizer.recognize(mp_img)
@@ -326,6 +336,17 @@ def main():
             estado["contadores"]["comandos"] += 1
             st.registrar_evento("comando", {"gesto": confirmado, "accion": info["accion"]})
             if confirmado == "Thumb_Up":
+                # El operario aprueba la pieza directamente (sin IA)
+                veredicto = {
+                    "estado": "APROBADO",
+                    "motivo": "aprobado por operario",
+                    "ts": datetime.now().isoformat(timespec="seconds"),
+                }
+                estado["ultima_inspeccion"] = veredicto
+                estado["contadores"]["aprobadas"] += 1
+                st.registrar_evento("calidad", veredicto)
+            elif confirmado == "Thumb_Down":
+                # El operario tiene dudas: manda la pieza a revisión de la IA
                 disparar_inspeccion(limpio)
             elif confirmado == "Open_Palm":
                 estado["linea_activa"] = False
@@ -360,8 +381,7 @@ def main():
         dibujar_overlay(frame, {
             "postura_riesgo": postura_riesgo,
             "angulo": angulo_int,
-            "puntos_px": puntos_px,
-            "detalle_postura": detalle_postura,
+            "puntos": puntos_px,
             "comando": estado["comando_actual"],
             "color_comando": color_comando,
             "linea_activa": estado["linea_activa"],
