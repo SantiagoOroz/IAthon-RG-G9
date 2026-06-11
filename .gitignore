@@ -1,0 +1,8 @@
+.env
+
+# Generados por la Estación 360 (estado de runtime, no versionar)
+__pycache__/
+estado.json
+eventos.jsonl
+ultima_captura.jpg
+comando_supervisor.json

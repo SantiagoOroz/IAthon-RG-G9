@@ -1,0 +1,8 @@
+opencv-python
+mediapipe
+numpy
+pandas
+streamlit
+google-genai
+python-dotenv
+pillow
