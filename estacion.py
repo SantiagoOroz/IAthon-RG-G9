@@ -126,18 +126,22 @@ def evaluar_postura(landmarks, w, h):
         problemas = []
         angulos   = []
 
-        # 1. Ángulo espinal bilateral
+        # 1. Ángulo espinal: usa el lado con mayor visibilidad mínima.
+        # Promediar ambos lados introduce ruido cuando uno está oculto (persona de perfil).
+        candidatos = []
         for ore, hom, cad in [
             ("oreja_izq", "hombro_izq", "cadera_izq"),
             ("oreja_der", "hombro_der", "cadera_der"),
         ]:
             if all(vis.get(k) for k in (ore, hom, cad)):
-                angulos.append(calcular_angulo(
+                confianza = min(lm[ore].visibility, lm[hom].visibility, lm[cad].visibility)
+                ang = calcular_angulo(
                     [lm[ore].x, lm[ore].y],
                     [lm[hom].x, lm[hom].y],
                     [lm[cad].x, lm[cad].y],
-                ))
-        angulo_prom = int(sum(angulos) / len(angulos)) if angulos else 0
+                )
+                candidatos.append((confianza, ang))
+        angulo_prom = int(max(candidatos, key=lambda x: x[0])[1]) if candidatos else 0
         if angulo_prom and angulo_prom < config.UMBRAL_POSTURA:
             problemas.append("espalda encorvada")
 
@@ -153,21 +157,50 @@ def evaluar_postura(landmarks, w, h):
                     problemas.append("cabeza adelantada")
                     break
 
-        # 3. Asimetría de hombros
+        # 3. Asimetría de hombros (solo cuando la persona está de frente)
+        # En perfil, los hombros se superponen en X y la métrica no tiene sentido.
         if vis["hombro_izq"] and vis["hombro_der"]:
-            torso_alto = max(
-                abs(lm["hombro_izq"].y - lm["cadera_izq"].y)
-                if vis["cadera_izq"] else 0,
-                0.05,
-            )
-            if abs(lm["hombro_izq"].y - lm["hombro_der"].y) / torso_alto > config.UMBRAL_HOMBROS_DESNIVELADOS:
-                problemas.append("hombros desnivelados")
+            ancho_hombros = abs(lm["hombro_izq"].x - lm["hombro_der"].x)
+            if ancho_hombros >= config.UMBRAL_FRONTAL_MIN:
+                torso_alto = max(
+                    abs(lm["hombro_izq"].y - lm["cadera_izq"].y)
+                    if vis["cadera_izq"] else 0,
+                    0.05,
+                )
+                if abs(lm["hombro_izq"].y - lm["hombro_der"].y) / torso_alto > config.UMBRAL_HOMBROS_DESNIVELADOS:
+                    problemas.append("hombros desnivelados")
 
         detalle = " + ".join(problemas) if problemas else "OK"
         return bool(problemas), angulo_prom, px, detalle
 
     except Exception:
         return False, 0, {}, "sin datos"
+
+
+# Conexiones del esqueleto completo de MediaPipe Pose (33 landmarks)
+_POSE_CONN = [
+    (0,1),(1,2),(2,3),(3,7),(0,4),(4,5),(5,6),(6,8),          # cara
+    (9,10),                                                     # boca
+    (11,12),(11,13),(13,15),(15,17),(15,19),(15,21),(17,19),   # brazo izq
+    (12,14),(14,16),(16,18),(16,20),(16,22),(18,20),           # brazo der
+    (11,23),(12,24),(23,24),                                    # torso
+    (23,25),(24,26),(25,27),(26,28),                           # muslos
+    (27,29),(28,30),(29,31),(30,32),(27,31),(28,32),           # tobillos/pies
+]
+
+
+def _dibujar_esqueleto(img, landmarks, postura_riesgo, w, h):
+    """Esqueleto completo: verde si postura OK, rojo si hay riesgo."""
+    MIN_VIS = 0.25
+    pts = [(int(lm.x * w), int(lm.y * h)) for lm in landmarks]
+    vis = [lm.visibility > MIN_VIS for lm in landmarks]
+    color = (0, 0, 210) if postura_riesgo else (0, 210, 0)
+    for a, b in _POSE_CONN:
+        if a < len(pts) and b < len(pts) and vis[a] and vis[b]:
+            cv2.line(img, pts[a], pts[b], color, 2, cv2.LINE_AA)
+    for i, p in enumerate(pts):
+        if vis[i]:
+            cv2.circle(img, p, 3, (245, 117, 66), -1)
 
 
 # --------------------------------------------------------------------------- #
@@ -195,23 +228,10 @@ def dibujar_overlay(img, datos):
     cv2.rectangle(img, (0, 0), (w, 50), col_post, -1)
     cv2.putText(img, txt_post, (12, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Esqueleto bilateral (izq + der + líneas de hombros y caderas)
-    px = datos.get("puntos_px", {})
-    if px:
-        for ore, hom, cad in [
-            ("oreja_izq", "hombro_izq", "cadera_izq"),
-            ("oreja_der", "hombro_der", "cadera_der"),
-        ]:
-            if ore in px and hom in px:
-                cv2.line(img, px[ore], px[hom], (255, 255, 255), 2)
-            if hom in px and cad in px:
-                cv2.line(img, px[hom], px[cad], (255, 255, 255), 2)
-        if "hombro_izq" in px and "hombro_der" in px:
-            cv2.line(img, px["hombro_izq"], px["hombro_der"], (200, 200, 80), 2)
-        if "cadera_izq" in px and "cadera_der" in px:
-            cv2.line(img, px["cadera_izq"], px["cadera_der"], (200, 200, 80), 2)
-        for p in px.values():
-            cv2.circle(img, p, 6, (245, 117, 66), -1)
+    # Puntos ergonómicos clave (resaltados encima del esqueleto completo)
+    for p in datos.get("puntos_px", {}).values():
+        cv2.circle(img, p, 9, (245, 117, 66), -1)
+        cv2.circle(img, p, 9, (255, 255, 255), 2)
 
     # Banner inferior: comando manos libres
     cv2.rectangle(img, (0, h - 50), (w, h), (30, 30, 30), -1)
@@ -282,31 +302,22 @@ def main():
         # ---- Capa postura ----
         postura_riesgo = False
         angulo_int = 0
+        h_fr, w_fr = frame.shape[:2]
         res_pose = pose_detector.detect(mp_img)
         if res_pose.pose_landmarks:
-            try:
-                lm = res_pose.pose_landmarks[0]
-                oreja, hombro, cadera = lm[7], lm[11], lm[23]
-                ang = calcular_angulo([oreja.x, oreja.y], [hombro.x, hombro.y], [cadera.x, cadera.y])
-                angulo_int = int(ang)
-                postura_riesgo = ang < config.UMBRAL_POSTURA
-                h, w = frame.shape[:2]
-                puntos_px = [
-                    (int(oreja.x * w), int(oreja.y * h)),
-                    (int(hombro.x * w), int(hombro.y * h)),
-                    (int(cadera.x * w), int(cadera.y * h)),
-                ]
-            except Exception:
-                pass
+            postura_riesgo, angulo_int, puntos_px, detalle_postura = evaluar_postura(
+                res_pose.pose_landmarks[0], w_fr, h_fr
+            )
+            _dibujar_esqueleto(frame, res_pose.pose_landmarks[0], postura_riesgo, w_fr, h_fr)
 
         if postura_riesgo:
             frames_mala_postura += 1
             if frames_mala_postura == config.FRAMES_ALERTA_POSTURA:
                 estado["contadores"]["alertas_postura"] += 1
-                st.registrar_evento("postura", {"angulo": angulo_int})
+                st.registrar_evento("postura", {"angulo": angulo_int, "detalle": detalle_postura})
         else:
             frames_mala_postura = 0
-        estado["postura"] = {"estado": "RIESGO" if postura_riesgo else "OK", "angulo": angulo_int}
+        estado["postura"] = {"estado": "RIESGO" if postura_riesgo else "OK", "angulo": angulo_int, "detalle": detalle_postura}
 
         # ---- Capa gestos (con debounce) ----
         res_gesto = gesto_recognizer.recognize(mp_img)
@@ -381,7 +392,8 @@ def main():
         dibujar_overlay(frame, {
             "postura_riesgo": postura_riesgo,
             "angulo": angulo_int,
-            "puntos": puntos_px,
+            "puntos_px": puntos_px,
+            "detalle_postura": detalle_postura,
             "comando": estado["comando_actual"],
             "color_comando": color_comando,
             "linea_activa": estado["linea_activa"],

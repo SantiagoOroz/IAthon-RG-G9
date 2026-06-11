@@ -33,9 +33,10 @@ POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarke
 GESTO_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
 
 # --- Ergonomía ---
-UMBRAL_POSTURA = 163          # grados oreja-hombro-cadera; por debajo = encorvado
-UMBRAL_CUELLO_ADELANTADO = 0.20   # fracción del ancho de torso; >0.20 = cabeza proyectada
-UMBRAL_HOMBROS_DESNIVELADOS = 0.07  # fracción del alto de torso; >0.07 = inclinación lateral
+UMBRAL_POSTURA = 155          # grados oreja-hombro-cadera; por debajo = encorvado
+UMBRAL_CUELLO_ADELANTADO = 0.99   # fracción del ancho de torso; >0.85 = cabeza proyectada
+UMBRAL_HOMBROS_DESNIVELADOS = 0.18  # fracción del alto de torso; >0.18 = inclinación lateral
+UMBRAL_FRONTAL_MIN = 0.25           # ancho hombros normalizado mínimo para considerar que la persona está de frente
 FRAMES_ALERTA_POSTURA = 15    # frames seguidos con riesgo antes de registrar una alerta
 
 # --- Gestos / comandos (debounce para no disparar 30 veces por segundo) ---
